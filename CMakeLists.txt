@@ -37,20 +37,8 @@
 project(godot-cpp)
 cmake_minimum_required(VERSION 3.6)
 
-# Change the output directory to the bin directory
-set(BUILD_PATH ${CMAKE_SOURCE_DIR}/bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${BUILD_PATH}")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${BUILD_PATH}")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${BUILD_PATH}")
-SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${BUILD_PATH}")
-SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${BUILD_PATH}")
-SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG "${BUILD_PATH}")
-SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE "${BUILD_PATH}")
-SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${BUILD_PATH}")
-SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${BUILD_PATH}")
-
 # Default build type is Debug in the SConstruct
-if(CMAKE_BUILD_TYPE STREQUAL "")
+if("${CMAKE_BUILD_TYPE}" STREQUAL "")
 	set(CMAKE_BUILD_TYPE Debug)
 endif()
 
@@ -67,7 +55,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Input from user for godot headers and the api file
 set(GODOT_HEADERS_DIR "godot_headers" CACHE STRING "")
-set(GODOT_CUSTOM_API_FILE "godot_headers/api.json" CACHE STRING "")
+set(GODOT_CUSTOM_API_FILE "${CMAKE_CURRENT_SOURCE_DIR}/godot_headers/api.json" CACHE STRING "")
 
 set(GODOT_COMPILE_FLAGS )
 set(GODOT_LINKER_FLAGS )
@@ -130,13 +118,46 @@ else()
 	endif(CMAKE_BUILD_TYPE MATCHES Debug)
 endif()
 
+# Create the correct name (godot.os.build_type.system_bits)
+
+set(BITS 32)
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+	set(BITS 64)
+endif(CMAKE_SIZEOF_VOID_P EQUAL 8)
+
+string(TOLOWER "${CMAKE_SYSTEM_NAME}" SYSTEM_NAME)
+string(TOLOWER "${CMAKE_BUILD_TYPE}" BUILD_TYPE)
+
+if(ANDROID)
+	# Added the android abi after system name
+	set(SYSTEM_NAME ${SYSTEM_NAME}.${ANDROID_ABI})
+	# Android does not have the bits at the end if you look at the main godot repo build
+	set(OUTNAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}")
+	set(OUTLIBNAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}.lib")
+else()
+	set(OUTNAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}.${BITS}")
+	set(OUTLIBNAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}.${BITS}.lib")
+endif()
+
 # Generate source from the bindings file
+if(NOT DEFINED GODOT_BIN)
+find_program(GODOT_BIN NAMES godot godot.exe)
+message("godot.exe = ${GODOT_BIN}")
+endif()
+
+if(NOT EXISTS ${GODOT_CUSTOM_API_FILE})
+message(STATUS "Generating api file: ${GODOT_CUSTOM_API_FILE}")
+execute_process(COMMAND ${GODOT_BIN} --gdnative-generate-json-api ${GODOT_CUSTOM_API_FILE})
+endif()
+
+if(${GODOT_CUSTOM_API_FILE} IS_NEWER_THAN ${PROJECT_BINARY_DIR}/api_generated.stamp)
 message(STATUS "Generating Bindings")
 execute_process(COMMAND "python" "-c" "import binding_generator; binding_generator.generate_bindings(\"${GODOT_CUSTOM_API_FILE}\")"
+	COMMAND "cmake" "-E" "touch" "${PROJECT_BINARY_DIR}/api_generated.stamp"
 	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 	RESULT_VARIABLE GENERATION_RESULT
 	OUTPUT_VARIABLE GENERATION_OUTPUT)
-message(STATUS ${GENERATION_RESULT} ${GENERATION_OUTPUT})
+endif()
 
 # Get Sources
 file(GLOB_RECURSE SOURCES src/*.c**)
@@ -161,21 +182,4 @@ target_include_directories(${PROJECT_NAME}
 set_property(TARGET ${PROJECT_NAME} APPEND_STRING PROPERTY COMPILE_FLAGS ${GODOT_COMPILE_FLAGS})
 set_property(TARGET ${PROJECT_NAME} APPEND_STRING PROPERTY LINK_FLAGS ${GODOT_LINKER_FLAGS})
 
-# Create the correct name (godot.os.build_type.system_bits)
-
-set(BITS 32)
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-	set(BITS 64)
-endif(CMAKE_SIZEOF_VOID_P EQUAL 8)
-
-string(TOLOWER ${CMAKE_SYSTEM_NAME} SYSTEM_NAME)
-string(TOLOWER ${CMAKE_BUILD_TYPE} BUILD_TYPE)
-
-if(ANDROID)
-	# Added the android abi after system name
-	set(SYSTEM_NAME ${SYSTEM_NAME}.${ANDROID_ABI})
-	# Android does not have the bits at the end if you look at the main godot repo build
-	set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}")
-else()
-	set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}.${BITS}")
-endif()
+set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME ${OUTNAME})
