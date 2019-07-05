@@ -42,12 +42,6 @@ if("${CMAKE_BUILD_TYPE}" STREQUAL "")
 	set(CMAKE_BUILD_TYPE Debug)
 endif()
 
-if(CMAKE_BUILD_TYPE MATCHES Debug)
-	add_definitions(-D_DEBUG)
-else()
-	add_definitions(-DNDEBUG)
-endif(CMAKE_BUILD_TYPE MATCHES Debug)
-
 # Set the c++ standard to c++14
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -62,15 +56,13 @@ set(GODOT_LINKER_FLAGS )
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 	# using Visual Studio C++
-	set(GODOT_COMPILE_FLAGS "/EHsc /WX") # /GF /MP
 
-	if(CMAKE_BUILD_TYPE MATCHES Debug)
-		set(GODOT_COMPILE_FLAGS "${GODOT_COMPILE_FLAGS} /MDd") # /Od /RTC1 /Zi
-	else()
-		set(GODOT_COMPILE_FLAGS "${GODOT_COMPILE_FLAGS} /MD /O2") # /Oy /GL /Gy
-		STRING(REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-		string(REPLACE "/RTC1" "" CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
-	endif(CMAKE_BUILD_TYPE MATCHES Debug)
+	# No runtime check
+	STRING(REGEX REPLACE "/RTC(su|[1su])" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+	string(REPLACE "/RTC1" "" CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
+
+	# Enable exception with "C" mode
+	set(GODOT_COMPILE_FLAGS "/EHsc /WX") # /GF /MP
 
 	# Disable conversion warning, trunkation, unreferenced var, signed missmatch
 	set(GODOT_COMPILE_FLAGS "${GODOT_COMPILE_FLAGS} /wd4244 /wd4305 /wd4101 /wd4018 /wd4267")
@@ -136,7 +128,8 @@ if(ANDROID)
 	set(OUTLIBNAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}.lib")
 else()
 	set(OUTNAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}.${BITS}")
-	set(OUTLIBNAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}.${BITS}.lib")
+	set(OUTNAME_DEBUG "godot-cpp.${SYSTEM_NAME}.Debug.${BITS}")
+	set(OUTNAME_RELEASE "godot-cpp.${SYSTEM_NAME}.Release.${BITS}")
 endif()
 
 # Generate source from the bindings file
@@ -182,4 +175,7 @@ target_include_directories(${PROJECT_NAME}
 set_property(TARGET ${PROJECT_NAME} APPEND_STRING PROPERTY COMPILE_FLAGS ${GODOT_COMPILE_FLAGS})
 set_property(TARGET ${PROJECT_NAME} APPEND_STRING PROPERTY LINK_FLAGS ${GODOT_LINKER_FLAGS})
 
-set_property(TARGET ${PROJECT_NAME} PROPERTY OUTPUT_NAME ${OUTNAME})
+# Defining _DEBUG is not required for MSVC
+if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+target_compile_definitions(tgt PRIVATE $<$<CONFIG:Debug>:_DEBUG>)
+endif()
