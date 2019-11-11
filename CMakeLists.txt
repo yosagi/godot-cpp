@@ -4,6 +4,7 @@
 # godot-cpp cmake arguments
 # GODOT_HEADERS_DIR:		This is where the gdnative include folder is (godot_source/modules/gdnative/include)
 # GODOT_CUSTOM_API_FILE:	This is if you have another path for the godot_api.json
+# GODOT_BIN:				Path to the godot executable to generate api.json. Leave empty to use GODOT_CUSTOM_API_FILE.
 # 
 # Android cmake arguments
 # CMAKE_TOOLCHAIN_FILE:		The path to the android cmake toolchain ($ANDROID_NDK/build/cmake/android.toolchain.cmake)
@@ -48,8 +49,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Input from user for godot headers and the api file
-set(GODOT_HEADERS_DIR "godot_headers" CACHE STRING "")
-set(GODOT_CUSTOM_API_FILE "${CMAKE_CURRENT_SOURCE_DIR}/godot_headers/api.json" CACHE STRING "")
+set(GODOT_HEADERS_DIR "godot_headers" CACHE PATH "")
+set(GODOT_CUSTOM_API_FILE "${CMAKE_CURRENT_SOURCE_DIR}/godot_headers/api.json" CACHE FILEPATH "")
+set(GODOT_BIN "" CACHE FILEPATH "Godot executable to generate GODOT_CUSTOM_API_FILE. Leave empty to use GODOT_CUSTOM_API_FILE.")
 
 set(GODOT_COMPILE_FLAGS )
 set(GODOT_LINKER_FLAGS )
@@ -110,46 +112,41 @@ else()
 	endif(CMAKE_BUILD_TYPE MATCHES Debug)
 endif()
 
-# Create the correct name (godot.os.build_type.system_bits)
+# prepare api.json
+if("${GODOT_BIN}" STREQUAL "")
+	if(EXISTS "${GODOT_CUSTOM_API_FILE}")
+	set(GODOT_API_FILE_GEN ${GODOT_CUSTOM_API_FILE})
+	else()
+	message(FATAL_ERROR "${GODOT_CUSTOM_API_FILE} is not readable")
+	endif()
+else()  # generate api file
+	set(GODOT_API_FILE_GEN ${PROJECT_BINARY_DIR}/godot_api.json)
+	execute_process(COMMAND ${GODOT_BIN} --version OUTPUT_VARIABLE GODOT_BIN_VERSION)
+	if(EXISTS ${PROJECT_BINARY_DIR}/godot_bin_version)
+		file(READ ${PROJECT_BINARY_DIR}/godot_bin_version GODOT_API_VERSION)
+	endif()
 
-set(BITS 32)
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-	set(BITS 64)
-endif(CMAKE_SIZEOF_VOID_P EQUAL 8)
-
-string(TOLOWER "${CMAKE_SYSTEM_NAME}" SYSTEM_NAME)
-string(TOLOWER "${CMAKE_BUILD_TYPE}" BUILD_TYPE)
-
-if(ANDROID)
-	# Added the android abi after system name
-	set(SYSTEM_NAME ${SYSTEM_NAME}.${ANDROID_ABI})
-	# Android does not have the bits at the end if you look at the main godot repo build
-	set(OUTNAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}")
-	set(OUTLIBNAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}.lib")
-else()
-	set(OUTNAME "godot-cpp.${SYSTEM_NAME}.${BUILD_TYPE}.${BITS}")
-	set(OUTNAME_DEBUG "godot-cpp.${SYSTEM_NAME}.Debug.${BITS}")
-	set(OUTNAME_RELEASE "godot-cpp.${SYSTEM_NAME}.Release.${BITS}")
+	if(NOT EXISTS ${GODOT_API_FILE_GEN} OR NOT "${GODOT_BIN_VERSION}" STREQUAL "${GODOT_API_VERSION}")
+		message(STATUS "Generating api file: ${GODOT_CUSTOM_API_FILE}")
+		execute_process(COMMAND ${GODOT_BIN} --gdnative-generate-json-api ${GODOT_API_FILE_GEN})
+		execute_process(COMMAND ${GODOT_BIN} --version OUTPUT_FILE ${PROJECT_BINARY_DIR}/godot_bin_version)
+	endif()
 endif()
 
 # Generate source from the bindings file
-if(NOT DEFINED GODOT_BIN)
-find_program(GODOT_BIN NAMES godot godot.exe)
-message("godot.exe = ${GODOT_BIN}")
-endif()
-
-if(NOT EXISTS ${GODOT_CUSTOM_API_FILE})
-message(STATUS "Generating api file: ${GODOT_CUSTOM_API_FILE}")
-execute_process(COMMAND ${GODOT_BIN} --gdnative-generate-json-api ${GODOT_CUSTOM_API_FILE})
-endif()
-
-if(${GODOT_CUSTOM_API_FILE} IS_NEWER_THAN ${PROJECT_BINARY_DIR}/api_generated.stamp)
-message(STATUS "Generating Bindings")
-execute_process(COMMAND "python" "-c" "import binding_generator; binding_generator.generate_bindings(\"${GODOT_CUSTOM_API_FILE}\")"
-	COMMAND "cmake" "-E" "touch" "${PROJECT_BINARY_DIR}/api_generated.stamp"
+if(${GODOT_API_FILE_GEN} IS_NEWER_THAN ${PROJECT_BINARY_DIR}/api_generated.stamp)
+	message(STATUS "Generating Bindings")
+	execute_process(COMMAND "python" "-c" "import binding_generator; binding_generator.generate_bindings(\"${GODOT_API_FILE_GEN}\")"
 	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 	RESULT_VARIABLE GENERATION_RESULT
 	OUTPUT_VARIABLE GENERATION_OUTPUT)
+	if (GENERATION_RESULT EQUAL "0")
+	message(STATUS "Success")
+		file(TOUCH ${PROJECT_BINARY_DIR}/api_generated.stamp)
+	else()
+		message(STATUS ${GENERATION_RESULT} ${GENERATION_OUTPUT})
+		message(FATAL_ERROR "Failed")
+	endif()
 endif()
 
 # Get Sources
@@ -178,4 +175,5 @@ set_property(TARGET ${PROJECT_NAME} APPEND_STRING PROPERTY LINK_FLAGS ${GODOT_LI
 # Defining _DEBUG is not required for MSVC
 if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
 target_compile_definitions(tgt PRIVATE $<$<CONFIG:Debug>:_DEBUG>)
+target_compile_definitions(tgt PRIVATE $<$<NOT:$<CONFIG:Debug>>:NDEBUG>)
 endif()
