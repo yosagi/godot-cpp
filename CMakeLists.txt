@@ -39,7 +39,7 @@ project(godot-cpp)
 cmake_minimum_required(VERSION 3.6)
 
 # Default build type is Debug in the SConstruct
-if(CMAKE_BUILD_TYPE STREQUAL "")
+if("${CMAKE_BUILD_TYPE}" STREQUAL "")
 	set(CMAKE_BUILD_TYPE Debug)
 endif()
 
