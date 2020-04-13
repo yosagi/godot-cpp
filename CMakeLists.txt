@@ -174,6 +174,6 @@ set_property(TARGET ${PROJECT_NAME} APPEND_STRING PROPERTY LINK_FLAGS ${GODOT_LI
 
 # Defining _DEBUG is not required for MSVC
 if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-target_compile_definitions(tgt PRIVATE $<$<CONFIG:Debug>:_DEBUG>)
-target_compile_definitions(tgt PRIVATE $<$<NOT:$<CONFIG:Debug>>:NDEBUG>)
+target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:Debug>:_DEBUG>)
+target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<NOT:$<CONFIG:Debug>>:NDEBUG>)
 endif()
