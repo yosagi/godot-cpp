@@ -7,7 +7,7 @@
 
 #include "String.hpp"
 
-#include <cmath>
+#include <Math.hpp>
 
 namespace godot {
 
@@ -167,6 +167,13 @@ struct Vector3 {
 
 	Vector3 cubic_interpolate(const Vector3 &b, const Vector3 &pre_a, const Vector3 &post_b, const real_t t) const;
 
+	Vector3 move_toward(const Vector3 &p_to, const real_t p_delta) const {
+		Vector3 v = *this;
+		Vector3 vd = p_to - v;
+		real_t len = vd.length();
+		return len <= p_delta || len < CMP_EPSILON ? p_to : v + vd / len * p_delta;
+	}
+
 	Vector3 bounce(const Vector3 &p_normal) const {
 		return -reflect(p_normal);
 	}
@@ -201,6 +208,12 @@ struct Vector3 {
 
 	inline real_t angle_to(const Vector3 &b) const {
 		return std::atan2(cross(b).length(), dot(b));
+	}
+
+	inline Vector3 direction_to(const Vector3 &p_b) const {
+		Vector3 ret(p_b.x - x, p_b.y - y, p_b.z - z);
+		ret.normalize();
+		return ret;
 	}
 
 	inline Vector3 floor() const {
@@ -238,8 +251,8 @@ struct Vector3 {
 		return v;
 	}
 
-	inline Vector3 reflect(const Vector3 &by) const {
-		return by - *this * this->dot(by) * 2.f;
+	inline Vector3 reflect(const Vector3 &p_normal) const {
+		return -(*this - p_normal * this->dot(p_normal) * 2.0);
 	}
 
 	inline Vector3 rotated(const Vector3 &axis, const real_t phi) const {
