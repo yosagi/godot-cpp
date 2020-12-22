@@ -52,7 +52,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(GODOT_HEADERS_DIR "godot_headers" CACHE PATH "")
 set(GODOT_CUSTOM_API_FILE "${CMAKE_CURRENT_SOURCE_DIR}/godot_headers/api.json" CACHE FILEPATH "")
 set(GODOT_BIN "" CACHE FILEPATH "Godot executable to generate GODOT_CUSTOM_API_FILE. Leave empty to use GODOT_CUSTOM_API_FILE.")
-
+set(GODOT_API_TEMPLATE_GET_NODE ON CACHE BOOL "Use template version of get_node")
 set(GODOT_COMPILE_FLAGS )
 set(GODOT_LINKER_FLAGS )
 
@@ -136,7 +136,7 @@ endif()
 # Generate source from the bindings file
 if(${GODOT_API_FILE_GEN} IS_NEWER_THAN ${PROJECT_BINARY_DIR}/api_generated.stamp)
 	message(STATUS "Generating Bindings")
-	execute_process(COMMAND "python" "-c" "import binding_generator; binding_generator.generate_bindings(\"${GODOT_API_FILE_GEN}\")"
+	execute_process(COMMAND "python" "-c" "import binding_generator; binding_generator.generate_bindings(\"${GODOT_API_FILE_GEN}\",\"${GODOT_API_TEMPLATE_GET_NODE}\")"
 	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 	RESULT_VARIABLE GENERATION_RESULT
 	OUTPUT_VARIABLE GENERATION_OUTPUT)
